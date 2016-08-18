@@ -133,7 +133,7 @@ if __name__ == "__main__":
     if not args.output or args.output == '-':
         out_handle = sys.stdout
     else:
-        out_handle = open(args.output, 'a+')
+        out_handle = open(args.output, 'w+')
 
     logging.debug('Starting output worker')
     output_worker = Thread(target=outputer, args=(result_queue, out_handle))
