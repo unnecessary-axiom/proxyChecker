@@ -70,6 +70,7 @@ def outputer(result_queue, output_handle):
             proxy=output_data
         ))
         output_handle.write(output_data)
+        output_handle.write("\n")
         result_queue.task_done()
 
 if __name__ == "__main__":
