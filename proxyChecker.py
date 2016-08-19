@@ -65,7 +65,7 @@ def worker(work_queue, result_queue):
             logging.debug('Failure for {}'.format(proxy_data['proxy_string']))
         work_queue.task_done()
 
-def outputer(result_queue, output_handle):
+def printer(result_queue, output_handle):
     logging.debug('Starting')
     while True:
         output_data = result_queue.get()
@@ -144,7 +144,7 @@ if __name__ == "__main__":
     logging.debug('Starting output worker')
     output_worker = Thread(
         name='WriterThread',
-        target=outputer,
+        target=printer,
         args=(result_queue, out_handle)
     )
     output_worker.start()
