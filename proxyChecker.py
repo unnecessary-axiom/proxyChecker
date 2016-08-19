@@ -53,7 +53,12 @@ def worker(work_queue, result_queue):
         if proxy_data is None:
             break
         logging.debug('Testing {}'.format(proxy_data['proxy_string']))
-        if isGoodProxy(**proxy_data):
+
+        test_args = proxy_data.copy()
+        if '://' not in test_args['proxy_string']:
+            test_args['proxy_string'] = 'http://{}'.format(test_args['proxy_string'])
+
+        if isGoodProxy(**test_args):
             logging.debug('Success for {}'.format(proxy_data['proxy_string']))
             result_queue.put(proxy_data['proxy_string'])
         else:
@@ -111,13 +116,9 @@ if __name__ == "__main__":
     work_queue = queue.Queue()
     for line in fileinput.input(args.input):
         line = line.rstrip("\n")
-        if '://' not in line:
-            proxy_string = 'http://{}'.format(line)
-        else:
-            proxy_string = line
         work_queue.put({
             'target_address': args.target_address,
-            'proxy_string': proxy_string,
+            'proxy_string': line,
             'timeout': args.timeout,
             'canary_text': args.canary_text,
         })
