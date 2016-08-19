@@ -128,7 +128,11 @@ if __name__ == "__main__":
     logging.debug('Starting {} workers'.format(NUM_WORKERS))
     workers = []
     for i in range(NUM_WORKERS):
-        w = Thread(target=worker, args=(work_queue, result_queue))
+        w = Thread(
+            name='WorkerThread {}'.format(i),
+            target=worker,
+            args=(work_queue, result_queue)
+        )
         workers.append(w)
         w.start()
 
@@ -138,7 +142,11 @@ if __name__ == "__main__":
         out_handle = open(args.output, 'w+')
 
     logging.debug('Starting output worker')
-    output_worker = Thread(target=outputer, args=(result_queue, out_handle))
+    output_worker = Thread(
+        name='WriterThread',
+        target=outputer,
+        args=(result_queue, out_handle)
+    )
     output_worker.start()
 
     work_queue.join()
