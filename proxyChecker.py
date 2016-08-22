@@ -8,7 +8,6 @@ import fileinput
 import sys
 
 logging.basicConfig(
-    level=logging.DEBUG,
     format='[%(levelname)s] (%(threadName)-10s) %(message)s',
 )
 
@@ -110,6 +109,13 @@ def printer(result_queue, output_handle):
 if __name__ == "__main__":
     NUM_WORKERS=10 # Arbitrary number
 
+    log_levels = {
+        'ERROR': logging.ERROR,
+        'WARNING': logging.WARNING,
+        'INFO': logging.INFO,
+        'DEBUG': logging.DEBUG,
+    }
+
     parser = argparse.ArgumentParser(description='Test a list of proxies')
     parser.add_argument(
         '--input',
@@ -145,10 +151,20 @@ if __name__ == "__main__":
         help='Type of proxies to check for. Default http.',
         default='http'
     )
+    parser.add_argument(
+        '--log-level',
+        choices=log_levels.keys(),
+        default='WARNING',
+        help='Logging verbosity level',
+    )
 
     args = parser.parse_args()
 
-    logging.debug('Filling work queue')
+    logging.getLogger().setLevel(
+        log_levels[args.log_level]
+    )
+
+    logging.info('Filling work queue')
     work_queue = queue.Queue()
     for line in fileinput.input(args.input):
         line = line.rstrip("\n")
@@ -162,7 +178,7 @@ if __name__ == "__main__":
 
     result_queue = queue.Queue()
 
-    logging.debug('Starting {} workers'.format(NUM_WORKERS))
+    logging.info('Starting {} workers'.format(NUM_WORKERS))
     workers = []
     for i in range(NUM_WORKERS):
         w = Thread(
@@ -178,7 +194,7 @@ if __name__ == "__main__":
     else:
         out_handle = open(args.output, 'w+')
 
-    logging.debug('Starting output worker')
+    logging.info('Starting output worker')
     output_worker = Thread(
         name='WriterThread',
         target=printer,
@@ -187,9 +203,9 @@ if __name__ == "__main__":
     output_worker.start()
 
     work_queue.join()
-    logging.debug('Work queue empty')
+    logging.info('Work queue empty')
     result_queue.join()
-    logging.debug('Result queue empty')
+    logging.info('Result queue empty')
 
     for i in range(NUM_WORKERS):
         work_queue.put(None)
@@ -197,6 +213,6 @@ if __name__ == "__main__":
     for w in workers:
         w.join()
     output_worker.join()
-    logging.debug('Cleaned up workers.')
+    logging.info('Cleaned up workers.')
 
-    logging.debug('Done')
+    logging.info('Done')
