@@ -124,19 +124,19 @@ if __name__ == "__main__":
     parser.add_argument(
         '--target-address',
         required=False,
-        help='A website to test against',
+        help='A website to test against. Default is a checkIP page.',
         default='http://checkip.dyndns.com/'
     )
     parser.add_argument(
         '--canary-text',
         required=False,
-        help='Some text to check for on the target website'
+        help='Some text to check for on the target website.'
     )
     parser.add_argument(
         '--timeout',
         required=False,
-        help='Timeout in seconds to give up on a proxy',
-        default=8,
+        help='Timeout in seconds to give up on a proxy. Default 5',
+        default=5,
         type=float,
     )
     parser.add_argument(
