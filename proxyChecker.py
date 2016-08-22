@@ -51,6 +51,13 @@ def isGoodProxy(target_address, proxy_string, timeout=8, canary_text=None):
     return True
 
 def worker(work_queue, result_queue):
+    """ A worker to be used with threading that tests proxies.
+
+    Args:
+        work_queue: a queue.Queue that is full of proxy data dicts. 
+            When fed None, stops processing.
+        result_queue: a queue.Queue to send the successful proxies to
+    """
     logging.debug('Starting')
     while True:
         proxy_data = work_queue.get()
@@ -90,6 +97,13 @@ def worker(work_queue, result_queue):
         work_queue.task_done()
 
 def printer(result_queue, output_handle):
+    """ A worker to be used with threading that prints output.
+    There should only be one of these
+
+    Args:
+        result_queue: A queue.Queue full of proxy results
+        output_handle: Handle to a file like object to receive results
+    """
     logging.debug('Starting')
     while True:
         output_data = result_queue.get()
@@ -160,10 +174,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    # Set logging level from args
     logging.getLogger().setLevel(
         log_levels[args.log_level]
     )
 
+    # Read input line by line into the work queue
+    # Read from a file or stdin
     logging.info('Filling work queue')
     work_queue = queue.Queue()
     for line in fileinput.input(args.input):
@@ -176,8 +193,10 @@ if __name__ == "__main__":
             'type': args.proxy_type,
         })
 
+    # Create a result queue
     result_queue = queue.Queue()
 
+    # Start tester workers
     logging.info('Starting {} workers'.format(NUM_WORKERS))
     workers = []
     for i in range(NUM_WORKERS):
@@ -189,11 +208,13 @@ if __name__ == "__main__":
         workers.append(w)
         w.start()
 
+    # Grab an output handle. File or stdout
     if not args.output or args.output == '-':
         out_handle = sys.stdout
     else:
         out_handle = open(args.output, 'w+')
 
+    # Start the worker to output successes
     logging.info('Starting output worker')
     output_worker = Thread(
         name='WriterThread',
@@ -202,11 +223,14 @@ if __name__ == "__main__":
     )
     output_worker.start()
 
+    # Wait until work queue is finished
     work_queue.join()
     logging.info('Work queue empty')
+    # Wait until results are all saved
     result_queue.join()
     logging.info('Result queue empty')
 
+    # Send a stop signal to all workers
     for i in range(NUM_WORKERS):
         work_queue.put(None)
     result_queue.put(None)
@@ -215,4 +239,5 @@ if __name__ == "__main__":
     output_worker.join()
     logging.info('Cleaned up workers.')
 
+    # Done!
     logging.info('Done')
