@@ -121,8 +121,6 @@ def printer(result_queue, output_handle):
         result_queue.task_done()
 
 if __name__ == "__main__":
-    NUM_WORKERS=10 # Arbitrary number
-
     log_levels = {
         'ERROR': logging.ERROR,
         'WARNING': logging.WARNING,
@@ -171,6 +169,12 @@ if __name__ == "__main__":
         default='WARNING',
         help='Logging verbosity level',
     )
+    parser.add_argument(
+        '--num-workers',
+        type=int,
+        help='The number of worker threads to split into. Default 10',
+        default=10
+    )
 
     args = parser.parse_args()
 
@@ -197,9 +201,9 @@ if __name__ == "__main__":
     result_queue = queue.Queue()
 
     # Start tester workers
-    logging.info('Starting {} workers'.format(NUM_WORKERS))
+    logging.info('Starting {} workers'.format(args.num_workers))
     workers = []
-    for i in range(NUM_WORKERS):
+    for i in range(args.num_workers):
         w = Thread(
             name='WorkerThread {}'.format(i),
             target=worker,
@@ -231,7 +235,7 @@ if __name__ == "__main__":
     logging.info('Result queue empty')
 
     # Send a stop signal to all workers
-    for i in range(NUM_WORKERS):
+    for i in range(args.num_workers):
         work_queue.put(None)
     result_queue.put(None)
     for w in workers:
