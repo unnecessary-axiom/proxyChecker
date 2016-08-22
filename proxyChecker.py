@@ -108,7 +108,7 @@ def printer(result_queue, output_handle):
         result_queue.task_done()
 
 if __name__ == "__main__":
-    NUM_WORKERS=5 # Arbitrary number
+    NUM_WORKERS=10 # Arbitrary number
 
     parser = argparse.ArgumentParser(description='Test a list of proxies')
     parser.add_argument(
