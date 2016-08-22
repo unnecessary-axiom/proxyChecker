@@ -29,11 +29,12 @@ def isGoodProxy(target_address, proxy_string, timeout=8, canary_text=None):
         'https' : proxy_string, 
     }
 
-    # This doesn't need to be every request, but we need to make sure it's done
     s = requests.Session()
-    a = requests.adapters.HTTPAdapter(max_retries=1)
-    s.mount('http://', a)
-    s.mount('https://', a)
+    # Kind of a hacky/nosy inspection to see if I need to apply my retry limit
+    if s.adapters['http://'].max_retries != 1 or s.adapters['https://'].max_retries != 1:
+        a = requests.adapters.HTTPAdapter(max_retries=1)
+        s.mount('http://', a)
+        s.mount('https://', a)
 
     try: 
         response = requests.get(target_address, timeout=timeout, proxies=proxies)
