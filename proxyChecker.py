@@ -1,11 +1,11 @@
 import logging
-import urllib.request
+import requests
+
 from threading import Thread
 import queue
 import argparse
 import fileinput
 import sys
-from socket import timeout
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -24,26 +24,30 @@ def isGoodProxy(target_address, proxy_string, timeout=8, canary_text=None):
     Returns:
         A boolean for proxy validity
     """
-    proxy_handler = urllib.request.ProxyHandler(proxies={
+    proxies = {
         'http' : proxy_string, 
         'https' : proxy_string, 
-    })
+    }
 
-    urllib.request.install_opener(
-        urllib.request.build_opener(proxy_handler)
-    )
+    # This doesn't need to be every request, but we need to make sure it's done
+    s = requests.Session()
+    a = requests.adapters.HTTPAdapter(max_retries=1)
+    s.mount('http://', a)
+    s.mount('https://', a)
 
     try: 
-        response = urllib.request.urlopen(target_address, timeout=timeout)
-    except Exception as e: 
-        #logging.debug('Got error "{e}" while checking {p}'.format(
-        #    e=str(e),
-        #    p=proxy_string,
-        #))
+        response = requests.get(target_address, timeout=timeout, proxies=proxies)
+    except requests.exceptions.Timeout as e:
+        return False
+    except Exception as e:
+        logging.debug('Got error "{e}" while checking {p}'.format(
+            e=str(e),
+            p=proxy_string,
+        ))
         return False
 
     if canary_text:
-        return (canary_text in response.read().decode('utf-8'))
+        return (canary_text in response.text)
     return True
 
 def worker(work_queue, result_queue):
