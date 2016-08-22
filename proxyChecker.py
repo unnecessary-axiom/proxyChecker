@@ -107,7 +107,8 @@ if __name__ == "__main__":
         '--timeout',
         required=False,
         help='Timeout in seconds to give up on a proxy',
-        default=8
+        default=8,
+        type=float,
     )
 
     args = parser.parse_args()
