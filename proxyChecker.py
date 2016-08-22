@@ -38,7 +38,7 @@ def isGoodProxy(target_address, proxy_string, timeout=8, canary_text=None):
 
     try: 
         response = requests.get(target_address, timeout=timeout, proxies=proxies)
-    except requests.exceptions.Timeout as e:
+    except (requests.exceptions.Timeout,requests.exceptions.ConnectionError) as e:
         return False
     except Exception as e:
         logging.debug('Got error "{e}" while checking {p}'.format(
@@ -57,17 +57,37 @@ def worker(work_queue, result_queue):
         proxy_data = work_queue.get()
         if proxy_data is None:
             break
-        logging.debug('Testing {}'.format(proxy_data['proxy_string']))
 
-        test_args = proxy_data.copy()
-        if '://' not in test_args['proxy_string']:
+        #TODO: Clean up ugly double code
+        proxy_type = proxy_data.pop('type')
+
+        if proxy_type in ('http', 'both'):
+            logging.debug('Testing {} for {}'.format(proxy_data['proxy_string'], 'http'))
+            test_args = proxy_data.copy()
             test_args['proxy_string'] = 'http://{}'.format(test_args['proxy_string'])
 
-        if isGoodProxy(**test_args):
-            logging.debug('Success for {}'.format(proxy_data['proxy_string']))
-            result_queue.put(proxy_data['proxy_string'])
-        else:
-            logging.debug('Failure for {}'.format(proxy_data['proxy_string']))
+            if isGoodProxy(**test_args):
+                logging.debug('Success for {} for {}'.format(proxy_data['proxy_string'], 'http'))
+                result_queue.put({
+                    'proxy_string': proxy_data['proxy_string'],
+                    'type': 'http',
+                })
+            else:
+                logging.debug('Failure for {} for {}'.format(proxy_data['proxy_string'], 'http'))
+
+        if proxy_type in ('socks', 'both'):
+            logging.debug('Testing {} for {}'.format(proxy_data['proxy_string'], 'socks'))
+            test_args = proxy_data.copy()
+            test_args['proxy_string'] = 'socks5://{}'.format(test_args['proxy_string'])
+
+            if isGoodProxy(**test_args):
+                logging.debug('Success for {} for {}'.format(proxy_data['proxy_string'], 'socks'))
+                result_queue.put({
+                    'proxy_string': proxy_data['proxy_string'],
+                    'type': 'socks',
+                })
+            else:
+                logging.debug('Failure for {} for {}'.format(proxy_data['proxy_string'], 'socks'))
         work_queue.task_done()
 
 def printer(result_queue, output_handle):
@@ -76,10 +96,14 @@ def printer(result_queue, output_handle):
         output_data = result_queue.get()
         if output_data is None:
             break
-        logging.debug('Saving {proxy}'.format(
-            proxy=output_data
+        logging.debug('Saving {} type {}'.format(
+            output_data['proxy_string'],
+            output_data['type'],
         ))
-        output_handle.write(output_data)
+        output_handle.write('{},{}'.format(
+            output_data['type'],
+            output_data['proxy_string']
+        ))
         output_handle.write("\n")
         result_queue.task_done()
 
@@ -115,6 +139,12 @@ if __name__ == "__main__":
         default=8,
         type=float,
     )
+    parser.add_argument(
+        '--proxy-type',
+        choices=['http', 'socks', 'both'],
+        help='Type of proxies to check for. Default http.',
+        default='http'
+    )
 
     args = parser.parse_args()
 
@@ -127,6 +157,7 @@ if __name__ == "__main__":
             'proxy_string': line,
             'timeout': args.timeout,
             'canary_text': args.canary_text,
+            'type': args.proxy_type,
         })
 
     result_queue = queue.Queue()
