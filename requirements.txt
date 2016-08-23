@@ -1,2 +1,3 @@
+netaddr==0.7.18
 PySocks==1.5.7
 requests==2.11.1

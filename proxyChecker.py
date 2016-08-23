@@ -2,6 +2,7 @@ import logging
 import requests
 
 from threading import Thread
+import netaddr
 import queue
 import argparse
 import fileinput
@@ -175,6 +176,10 @@ if __name__ == "__main__":
         help='The number of worker threads to split into. Default 10',
         default=10
     )
+    parser.add_argument(
+        '--exclusion-list',
+        help='A list of IP block seperated by whitespace to not check',
+    )
 
     args = parser.parse_args()
 
@@ -183,19 +188,54 @@ if __name__ == "__main__":
         log_levels[args.log_level]
     )
 
-    # Read input line by line into the work queue
-    # Read from a file or stdin
-    logging.info('Filling work queue')
+    # Create a work queue
     work_queue = queue.Queue()
+
+    # Read input line by line into a list
+    # Read from a file or stdin
+    loaded_proxies = []
+    logging.info('Reading work list')
     for line in fileinput.input(args.input):
         line = line.rstrip("\n")
+        loaded_proxies.append(line)
+
+    if args.exclusion_list:
+        logging.info('Creating exclusion list')
+        ranges = []
+        with open(args.exclusion_list, 'r') as f:
+            for block in f:
+                begin, end = block.split()[:2]
+                try:
+                    ranges.append(netaddr.IPRange(begin, end))
+                except netaddr.AddrFormatError as e:
+                    raise Exception("Error importing blocks: {} - {}".format(begin, end)) from e
+
+        logging.info('Checking against list')
+        # Check against ranges
+        good_proxies = []
+        # TODO: DO THIS BETTER?
+        for proxy in loaded_proxies:
+            (ip, port) = proxy.split(':')
+            addr = netaddr.IPAddress(ip)
+            intersection = next((r for r in ranges if (addr in r)), None)
+            if intersection is None:
+                good_proxies.append(proxy)
+            else:
+                logging.info("Proxy {} in exclusion list".format(proxy))
+    else:
+        good_proxies = loaded_proxies
+
+    logging.info('Filling work queue')
+    for proxy in good_proxies:
         work_queue.put({
             'target_address': args.target_address,
-            'proxy_string': line,
+            'proxy_string': proxy,
             'timeout': args.timeout,
             'canary_text': args.canary_text,
             'type': args.proxy_type,
         })
+    del(good_proxies)
+    del(loaded_proxies)
 
     # Create a result queue
     result_queue = queue.Queue()
