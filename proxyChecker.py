@@ -272,15 +272,6 @@ if __name__ == "__main__":
     )
     output_worker.start()
 
-    # Attempt to print Queue size info
-    # Info or more verbose
-    if logging.getLogger().level <= logging.INFO:
-        remaining = work_queue.qsize()
-        while remaining > 0:
-            remaining = work_queue.qsize()
-            logging.info('{} remaining proxies'.format(remaining))
-            time.sleep(5)
-
     # Wait until work queue is finished
     work_queue.join()
     logging.info('Work queue empty')
