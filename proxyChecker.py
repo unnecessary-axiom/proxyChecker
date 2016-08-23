@@ -217,7 +217,11 @@ if __name__ == "__main__":
         # TODO: DO THIS BETTER?
         for proxy in loaded_proxies:
             (ip, port) = proxy.split(':')
-            addr = netaddr.IPAddress(ip)
+            try:
+                addr = netaddr.IPAddress(ip)
+            except netaddr.AddrFormatError as e:
+                logging.info("Malformed address {}, skipping".format(ip))
+                continue
             intersection = next((r for r in ranges if (addr in r)), None)
             if intersection is None:
                 good_proxies.append(proxy)
