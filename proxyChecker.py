@@ -6,6 +6,7 @@ import netaddr
 import queue
 import argparse
 import fileinput
+import time
 import sys
 
 logging.basicConfig(
@@ -266,6 +267,15 @@ if __name__ == "__main__":
         args=(result_queue, out_handle)
     )
     output_worker.start()
+
+    # Attempt to print Queue size info
+    # Info or more verbose
+    if logging.getLogger().level <= logging.INFO:
+        remaining = work_queue.qsize()
+        while remaining > 0:
+            remaining = work_queue.qsize()
+            logging.info('{} remaining proxies'.format(remaining))
+            time.sleep(5)
 
     # Wait until work queue is finished
     work_queue.join()
