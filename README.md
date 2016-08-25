@@ -4,9 +4,9 @@ ProxyChecker is a Python 3 script to test a list of socks/http proxies in a thre
 
 ## Installation
 
-Clone or download this repo: `git clone git@github.com:unnecessary-axiom/proxyChecker.git`
-Install dependencies `pip install -r requirements.txt`
-Run script: `python proxyChecker.py --arguments`
+* Clone or download this repo: `git clone git@github.com:unnecessary-axiom/proxyChecker.git`
+* Install dependencies `pip install -r requirements.txt`
+* Run script: `python proxyChecker.py --arguments`
 
 ## Usage
 
