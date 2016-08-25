@@ -123,10 +123,10 @@ def printer(result_queue, output_handle):
             output_data['proxy_string'],
             output_data['proxy_type'],
         ))
-        output_handle.write('{},{},{:.2f}'.format(
+        output_handle.write('{},{:.2f},{}'.format(
             output_data['proxy_type'],
+            output_data['response_time'].seconds + output_data['response_time'].microseconds / 10000000,
             output_data['proxy_string'],
-            output_data['response_time'].seconds + output_data['response_time'].microseconds / 10000000
         ))
         output_handle.write("\n")
         result_queue.task_done()
