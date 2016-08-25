@@ -13,37 +13,65 @@ logging.basicConfig(
     format='[%(levelname)s] (%(threadName)-10s) %(message)s',
 )
 
-def isGoodProxy(target_address, proxy_string, timeout=8, canary_text=None):
+def isGoodProxy(target_address, proxy_string, proxy_type, timeout=8, text_present=None, text_absent=True):
     """ Check the validity of a proxy
 
     Args:
         target_address: A website address to check
-        proxy_string: A proxy address in the format proto://ip:port
+        proxy_string: A proxy address in the format ip:port
+        proxy_type: Type of proxy to test for. socks4/5 or http
         timeout: A connection timeout in seconds
-        canary_text: Optional text to check for presense of in the response
+        text_present: Optional text to check for presense of in the response
+        text_absent: Optional text to check for absence of in the response
 
     Returns:
-        A boolean for proxy validity
+        A dict:
+            {
+                'proxy_string': [String of addr:port],
+                'proxy_type': [whatever type you passed in],
+                'success': [Bool],
+                'response_time': [response time in timedelta format],
+            }
     """
+    if 'socks' not in proxy_type.lower() and 'http' not in proxy_type.lower():
+        raise Exception('Invalid proxy type {}'.format(proxy_type))
+
     proxies = {
-        'http' : proxy_string, 
-        'https' : proxy_string, 
+        'http' : '{}://{}'.format(proxy_type.lower(), proxy_string),
+        'https' : '{}://{}'.format(proxy_type.lower(), proxy_string),
     }
 
     try: 
         response = requests.get(target_address, timeout=timeout, proxies=proxies)
     except (requests.exceptions.Timeout,requests.exceptions.ConnectionError) as e:
-        return False
+        return {
+            'proxy_string': proxy_string,
+            'proxy_type': proxy_type,
+            'success': False,
+            'response_time': None,
+        }
     except Exception as e:
         logging.debug('Got error "{e}" while checking {p}'.format(
             e=str(e),
             p=proxy_string,
         ))
-        return False
+        return {
+            'proxy_string': proxy_string,
+            'proxy_type': proxy_type,
+            'success': False,
+            'response_time': None,
+        }
 
-    if canary_text:
-        return (canary_text in response.text)
-    return True
+    present_flag = True if text_present is None else (text_present in response.text)
+    absent_flag = True if text_absent is None else (text_absent not in response.text)
+    success = present_flag and absent_flag
+    return {
+        'proxy_string': proxy_string,
+        'proxy_type': proxy_type,
+        'success': success,
+        'response_time': response.elapsed,
+    }
+
 
 def worker(work_queue, result_queue):
     """ A worker to be used with threading that tests proxies.
@@ -59,36 +87,23 @@ def worker(work_queue, result_queue):
         if proxy_data is None:
             break
 
-        #TODO: Clean up ugly double code
-        proxy_type = proxy_data.pop('type')
+        logging.info('Testing {} for {}'.format(
+            proxy_data['proxy_string'],
+            proxy_data['proxy_type']
+        ))
+        results = isGoodProxy(**proxy_data)
+        if results['success']:
+            logging.info('Success for {} for {}'.format(
+                proxy_data['proxy_string'],
+                proxy_data['proxy_type']
+            ))
+            result_queue.put(results)
+        else:
+            logging.info('Failure for {} for {}'.format(
+                proxy_data['proxy_string'],
+                proxy_data['proxy_type']
+            ))
 
-        if proxy_type in ('http', 'both'):
-            logging.debug('Testing {} for {}'.format(proxy_data['proxy_string'], 'http'))
-            test_args = proxy_data.copy()
-            test_args['proxy_string'] = 'http://{}'.format(test_args['proxy_string'])
-
-            if isGoodProxy(**test_args):
-                logging.debug('Success for {} for {}'.format(proxy_data['proxy_string'], 'http'))
-                result_queue.put({
-                    'proxy_string': proxy_data['proxy_string'],
-                    'type': 'http',
-                })
-            else:
-                logging.debug('Failure for {} for {}'.format(proxy_data['proxy_string'], 'http'))
-
-        if proxy_type in ('socks', 'both'):
-            logging.debug('Testing {} for {}'.format(proxy_data['proxy_string'], 'socks'))
-            test_args = proxy_data.copy()
-            test_args['proxy_string'] = 'socks5://{}'.format(test_args['proxy_string'])
-
-            if isGoodProxy(**test_args):
-                logging.debug('Success for {} for {}'.format(proxy_data['proxy_string'], 'socks'))
-                result_queue.put({
-                    'proxy_string': proxy_data['proxy_string'],
-                    'type': 'socks',
-                })
-            else:
-                logging.debug('Failure for {} for {}'.format(proxy_data['proxy_string'], 'socks'))
         work_queue.task_done()
 
 def printer(result_queue, output_handle):
@@ -106,14 +121,52 @@ def printer(result_queue, output_handle):
             break
         logging.debug('Saving {} type {}'.format(
             output_data['proxy_string'],
-            output_data['type'],
+            output_data['proxy_type'],
         ))
-        output_handle.write('{},{}'.format(
-            output_data['type'],
-            output_data['proxy_string']
+        output_handle.write('{},{},{:.2f}'.format(
+            output_data['proxy_type'],
+            output_data['proxy_string'],
+            output_data['response_time'].seconds + output_data['response_time'].microseconds / 10000000
         ))
         output_handle.write("\n")
         result_queue.task_done()
+
+def clean_addresses(addresses, blacklist=[]):
+
+    # Parse and validate passed addresses
+    parsed_addresses = []
+    for address in addresses:
+        (ip, port) = address.split(':')
+        try:
+            netip = netaddr.IPAddress(ip)
+            parsed_addresses.append((address, netip))
+        except netaddr.AddrFormatError as e:
+            logging.info("Malformed address {}, skipping".format(ip))
+            continue
+
+    # Fill a list of parsed blacklist entries
+    ranges = []
+    for pair in blacklist:
+        (begin, end) = pair
+        try:
+            ranges.append(netaddr.IPRange(begin, end))
+        except netaddr.AddrFormatError as e:
+            raise Exception("Error importing blocks: {} - {}".format(begin, end)) from e
+
+    # Shortcut if we have no blacklist ranges
+    if not ranges:
+        return [i[0] for i in parsed_addresses]
+
+    # Clean each address against the blacklist
+    clean = []
+    for addr in parsed_addresses:
+        proxy, netip = addr
+        intersection = next((r for r in ranges if (netip in r)), None)
+        if intersection is None:
+            clean.append(proxy)
+        else:
+            logging.info("Proxy {} in exclusion list".format(proxy))
+    return clean
 
 if __name__ == "__main__":
     log_levels = {
@@ -141,9 +194,14 @@ if __name__ == "__main__":
         default='http://checkip.dyndns.com/'
     )
     parser.add_argument(
-        '--canary-text',
+        '--text-present',
         required=False,
-        help='Some text to check for on the target website.'
+        help='Some text that should be present on the target website. For example, some words you know exist.'
+    )
+    parser.add_argument(
+        '--text-absent',
+        required=False,
+        help='Some text that should be absent on the target website. For example, your public IP.'
     )
     parser.add_argument(
         '--timeout',
@@ -154,8 +212,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--proxy-type',
-        choices=['http', 'socks', 'both'],
-        help='Type of proxies to check for. Default http.',
+        help='List of types of proxies to check for. Allows socks4, socks5, http',
+        nargs='*',
+        choices=['http', 'socks4', 'socks5'],
         default='http'
     )
     parser.add_argument(
@@ -193,47 +252,30 @@ if __name__ == "__main__":
         line = line.rstrip("\n")
         loaded_proxies.append(line)
 
+    exclusions = []
     if args.exclusion_list:
         logging.info('Creating exclusion list')
-        ranges = []
         with open(args.exclusion_list, 'r') as f:
             for block in f:
                 begin, end = block.split()[:2]
-                try:
-                    ranges.append(netaddr.IPRange(begin, end))
-                except netaddr.AddrFormatError as e:
-                    raise Exception("Error importing blocks: {} - {}".format(begin, end)) from e
+                exclusions.append((begin,end))
 
-        logging.info('Checking against list')
-        # Check against ranges
-        good_proxies = []
-        # TODO: DO THIS BETTER?
-        for proxy in loaded_proxies:
-            (ip, port) = proxy.split(':')
-            try:
-                addr = netaddr.IPAddress(ip)
-            except netaddr.AddrFormatError as e:
-                logging.info("Malformed address {}, skipping".format(ip))
-                continue
-            intersection = next((r for r in ranges if (addr in r)), None)
-            if intersection is None:
-                good_proxies.append(proxy)
-            else:
-                logging.info("Proxy {} in exclusion list".format(proxy))
-    else:
-        good_proxies = loaded_proxies
+    logging.info('Cleaning addresses')
+    # This list is removed a couple lines down after we fill the queue
+    good_proxies = clean_addresses(loaded_proxies, exclusions)
 
     logging.info('Filling work queue')
     for proxy in good_proxies:
-        work_queue.put({
-            'target_address': args.target_address,
-            'proxy_string': proxy,
-            'timeout': args.timeout,
-            'canary_text': args.canary_text,
-            'type': args.proxy_type,
-        })
+        for ptype in args.proxy_type:
+            work_queue.put({
+                'target_address': args.target_address,
+                'proxy_string': proxy,
+                'timeout': args.timeout,
+                'text_present': args.text_present,
+                'text_absent': args.text_absent,
+                'proxy_type': ptype,
+            })
     del(good_proxies)
-    del(loaded_proxies)
 
     # Create a result queue
     result_queue = queue.Queue()
