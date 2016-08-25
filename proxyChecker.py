@@ -62,8 +62,14 @@ def isGoodProxy(target_address, proxy_string, proxy_type, timeout=8, text_presen
             'response_time': None,
         }
 
-    present_flag = True if text_present is None else (text_present in response.text)
-    absent_flag = True if text_absent is None else (text_absent not in response.text)
+    present_flag = (text_present is None or (text_present in response.text))
+    if not present_flag:
+        logging.debug("Missing supposedly present text in resposne for {}".format(proxy_string))
+
+    absent_flag = (text_absent is None or (text_absent not in response.text))
+    if not absent_flag:
+        logging.debug("Found supposedly absent text in resposne for {}".format(proxy_string))
+
     success = present_flag and absent_flag
     return {
         'proxy_string': proxy_string,
