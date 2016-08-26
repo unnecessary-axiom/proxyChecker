@@ -152,12 +152,15 @@ def clean_addresses(addresses, blacklist=[]):
 
     # Fill a list of parsed blacklist entries
     ranges = []
-    for pair in blacklist:
-        (begin, end) = pair
+    for block in blacklist:
         try:
-            ranges.append(netaddr.IPRange(begin, end))
+            if '-' in block:
+                start, end = block.split('-')
+                ranges.append(netaddr.IPRange(start, end))
+            else:
+                ranges.append(netaddr.IPNetwork(block))
         except netaddr.AddrFormatError as e:
-            raise Exception("Error importing blocks: {} - {}".format(begin, end)) from e
+            raise Exception("Error importing blocks: {}".format(block)) from e
 
     # Shortcut if we have no blacklist ranges
     if not ranges:
@@ -263,8 +266,9 @@ if __name__ == "__main__":
         logging.info('Creating exclusion list')
         with open(args.exclusion_list, 'r') as f:
             for block in f:
-                begin, end = block.split()[:2]
-                exclusions.append((begin,end))
+                block = block.rstrip("\n")
+                if block and block[0] != '#':
+                    exclusions.append(block)
 
     logging.info('Cleaning addresses')
     # This list is removed a couple lines down after we fill the queue
