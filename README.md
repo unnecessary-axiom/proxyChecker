@@ -26,5 +26,3 @@ The exclusion list is a list of ranges separated by newlines. Ranges are defined
 
 It's recommended to check for text on the target webpage since many proxies have a login or initial redirect. 
 
-## Notes
-
