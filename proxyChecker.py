@@ -79,13 +79,14 @@ def isGoodProxy(target_address, proxy_string, proxy_type, timeout=8, text_presen
     }
 
 
-def worker(work_queue, result_queue):
+def worker(work_queue, result_queue, checking_function):
     """ A worker to be used with threading that tests proxies.
 
     Args:
         work_queue: a queue.Queue that is full of proxy data dicts. 
             When fed None, stops processing.
         result_queue: a queue.Queue to send the successful proxies to
+        checking_function: A function to pass the work queue data into. Should return results dict.
     """
     logging.debug('Starting')
     while True:
@@ -97,7 +98,7 @@ def worker(work_queue, result_queue):
             proxy_data['proxy_string'],
             proxy_data['proxy_type']
         ))
-        results = isGoodProxy(**proxy_data)
+        results = checking_function(**proxy_data)
         if results['success']:
             logging.info('Success for {} for {}'.format(
                 proxy_data['proxy_string'],
@@ -178,6 +179,7 @@ def clean_addresses(addresses, blacklist=[]):
     return clean
 
 if __name__ == "__main__":
+    checking_function = isGoodProxy
     log_levels = {
         'ERROR': logging.ERROR,
         'WARNING': logging.WARNING,
@@ -297,7 +299,7 @@ if __name__ == "__main__":
         w = Thread(
             name='WorkerThread {}'.format(i),
             target=worker,
-            args=(work_queue, result_queue)
+            args=(work_queue, result_queue, checking_function)
         )
         workers.append(w)
         w.start()
