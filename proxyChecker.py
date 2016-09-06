@@ -305,6 +305,8 @@ if __name__ == "__main__":
     logging.info('Cleaning addresses')
     # This list is removed a couple lines down after we fill the queue
     good_proxies = clean_addresses(loaded_proxies, exclusions)
+    del(loaded_proxies)
+    del(exclusions)
 
     logging.info('Filling work queue')
     for proxy in good_proxies:
