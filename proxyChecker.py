@@ -255,6 +255,36 @@ if __name__ == "__main__":
     # Create a work queue
     work_queue = queue.Queue()
 
+    # Create a result queue
+    result_queue = queue.Queue()
+
+    # Start tester workers
+    logging.info('Starting {} workers'.format(args.num_workers))
+    workers = []
+    for i in range(args.num_workers):
+        w = Thread(
+            name='WorkerThread {}'.format(i),
+            target=worker,
+            args=(work_queue, result_queue, checking_function)
+        )
+        workers.append(w)
+        w.start()
+
+    # Grab an output handle. File or stdout
+    if not args.output or args.output == '-':
+        out_handle = sys.stdout
+    else:
+        out_handle = open(args.output, 'w+')
+
+    # Start the worker to output successes
+    logging.info('Starting output worker')
+    output_worker = Thread(
+        name='WriterThread',
+        target=printer,
+        args=(result_queue, out_handle)
+    )
+    output_worker.start()
+
     # Read input line by line into a list
     # Read from a file or stdin
     loaded_proxies = []
@@ -288,36 +318,6 @@ if __name__ == "__main__":
                 'proxy_type': ptype,
             })
     del(good_proxies)
-
-    # Create a result queue
-    result_queue = queue.Queue()
-
-    # Start tester workers
-    logging.info('Starting {} workers'.format(args.num_workers))
-    workers = []
-    for i in range(args.num_workers):
-        w = Thread(
-            name='WorkerThread {}'.format(i),
-            target=worker,
-            args=(work_queue, result_queue, checking_function)
-        )
-        workers.append(w)
-        w.start()
-
-    # Grab an output handle. File or stdout
-    if not args.output or args.output == '-':
-        out_handle = sys.stdout
-    else:
-        out_handle = open(args.output, 'w+')
-
-    # Start the worker to output successes
-    logging.info('Starting output worker')
-    output_worker = Thread(
-        name='WriterThread',
-        target=printer,
-        args=(result_queue, out_handle)
-    )
-    output_worker.start()
 
     # Wait until work queue is finished
     work_queue.join()
