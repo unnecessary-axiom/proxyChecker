@@ -187,6 +187,9 @@ if __name__ == "__main__":
         'DEBUG': logging.DEBUG,
     }
 
+    # Lower requests logging level so I can be center stage
+    logging.getLogger("requests").setLevel(logging.WARNING)
+
     parser = argparse.ArgumentParser(description='Test a list of proxies')
     parser.add_argument(
         '--input',
